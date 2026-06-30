@@ -17,6 +17,8 @@ import {
   WidthType,
 } from "docx";
 
+import { jsPDF } from "jspdf";
+
 type Field = {
   name: string;
   label: string;
@@ -406,6 +408,261 @@ function removeInvoiceItem(index: number) {
     (template) => template.id === selectedTemplateId
   );
 
+function handleDownloadPdf(
+  values: Record<string, FormDataEntryValue>,
+  isEnglish: boolean
+) {
+  const pdf = new jsPDF("p", "mm", "a4");
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+
+  const marginLeft = 25;
+  const marginRight = 25;
+  const contentWidth = pageWidth - marginLeft - marginRight;
+
+  let y = 28;
+
+  const getValue = (key: string) => String(values[key] || "").trim();
+
+  const safeFileName = (text: string) =>
+    text.replace(/[\\/:*?"<>|]/g, "-").trim() || "DokumenJadi";
+
+  function checkPage(requiredSpace = 12) {
+    if (y + requiredSpace > pageHeight - 22) {
+      pdf.addPage();
+      y = 28;
+    }
+  }
+
+  function addCenteredText(text: string, size = 14, bold = false, after = 7) {
+    checkPage(after + 5);
+
+    pdf.setFont("times", bold ? "bold" : "normal");
+    pdf.setFontSize(size);
+    pdf.text(text, pageWidth / 2, y, { align: "center" });
+
+    y += after;
+  }
+
+  function addSectionTitle(text: string) {
+    checkPage(12);
+
+    y += 5;
+    pdf.setFont("times", "bold");
+    pdf.setFontSize(13);
+    pdf.text(text, marginLeft, y);
+
+    y += 8;
+  }
+
+  function addParagraph(text: string) {
+    pdf.setFont("times", "normal");
+    pdf.setFontSize(12);
+
+    const paragraphs = (text || "-").split("\n");
+
+    paragraphs.forEach((paragraph) => {
+      const lines = pdf.splitTextToSize(
+        paragraph || " ",
+        contentWidth
+      ) as string[];
+
+      lines.forEach((line) => {
+        checkPage(8);
+        pdf.text(line, marginLeft, y);
+        y += 7;
+      });
+
+      y += 2;
+    });
+  }
+
+  function addInfoTable(rows: { label: string; value: string }[]) {
+    const labelWidth = 48;
+    const valueWidth = contentWidth - labelWidth;
+    const rowHeight = 11;
+
+    pdf.setFontSize(12);
+
+    rows.forEach((row) => {
+      checkPage(rowHeight + 3);
+
+      pdf.setDrawColor(0);
+      pdf.setLineWidth(0.2);
+
+      pdf.rect(marginLeft, y, labelWidth, rowHeight);
+      pdf.rect(marginLeft + labelWidth, y, valueWidth, rowHeight);
+
+      pdf.setFont("times", "bold");
+      pdf.text(row.label, marginLeft + 3, y + 7);
+
+      pdf.setFont("times", "normal");
+      pdf.text(row.value || "-", marginLeft + labelWidth + 3, y + 7);
+
+      y += rowHeight;
+    });
+
+    y += 3;
+  }
+
+  function addSignatureBlock(
+    city: string,
+    dateText: string,
+    roleText: string,
+    signerName: string
+  ) {
+    checkPage(55);
+
+    const blockWidth = 65;
+    const blockX = pageWidth - marginRight - blockWidth;
+
+    y += 8;
+
+    pdf.setFont("times", "normal");
+    pdf.setFontSize(12);
+
+    pdf.text(`${city}, ${dateText}`, blockX + blockWidth / 2, y, {
+      align: "center",
+    });
+
+    y += 12;
+
+    pdf.text(roleText, blockX + blockWidth / 2, y, {
+      align: "center",
+    });
+
+    y += 6;
+
+    if (signatureData) {
+      pdf.addImage(signatureData, "PNG", blockX + 17, y, 32, 18);
+    }
+
+    y += 28;
+
+    pdf.text(signerName, blockX + blockWidth / 2, y, {
+      align: "center",
+    });
+  }
+
+  if (selectedTemplateId === "proposal-kegiatan") {
+    const namaKegiatan = getValue("namaKegiatan");
+    const latarBelakang = getValue("latarBelakang");
+    const tujuan = getValue("tujuan");
+    const waktuKegiatan = getValue("waktuKegiatan");
+    const tempatKegiatan = getValue("tempatKegiatan");
+    const sasaranPeserta = getValue("sasaranPeserta");
+    const anggaran = getValue("anggaran");
+    const namaPenanggungJawab = getValue("namaPenanggungJawab");
+    const kota = getValue("kota");
+    const tanggalDokumen = getValue("tanggalDokumen");
+
+    const tanggalDokumenFormatted = isEnglish
+      ? formatTanggalInggris(tanggalDokumen)
+      : formatTanggalIndonesia(tanggalDokumen);
+
+    addCenteredText(
+      isEnglish ? "ACTIVITY PROPOSAL" : "PROPOSAL KEGIATAN",
+      16,
+      true,
+      8
+    );
+
+    addCenteredText(namaKegiatan.toUpperCase(), 14, true, 12);
+
+    addSectionTitle(isEnglish ? "A. Background" : "A. Latar Belakang");
+    addParagraph(latarBelakang);
+
+    addSectionTitle(
+      isEnglish ? "B. Purpose and Objectives" : "B. Maksud dan Tujuan"
+    );
+    addParagraph(tujuan);
+
+    addSectionTitle(
+      isEnglish
+        ? "C. Time and Place of Activity"
+        : "C. Waktu dan Tempat Kegiatan"
+    );
+
+    addInfoTable([
+      {
+        label: isEnglish ? "Time" : "Waktu",
+        value: waktuKegiatan,
+      },
+      {
+        label: isEnglish ? "Place" : "Tempat",
+        value: tempatKegiatan,
+      },
+    ]);
+
+    addSectionTitle(
+      isEnglish ? "D. Target Participants" : "D. Sasaran Peserta"
+    );
+    addParagraph(sasaranPeserta);
+
+    addSectionTitle(isEnglish ? "E. Budget Plan" : "E. Rencana Anggaran");
+    addParagraph(anggaran || "-");
+
+    addSectionTitle(isEnglish ? "F. Closing" : "F. Penutup");
+    addParagraph(
+      isEnglish
+        ? "Thus, this activity proposal is prepared to serve as a reference for the implementation of the activity. Thank you for your attention and support."
+        : "Demikian proposal kegiatan ini disusun sebagai acuan pelaksanaan kegiatan. Atas perhatian dan dukungan yang diberikan, kami ucapkan terima kasih."
+    );
+
+    addSignatureBlock(
+      kota,
+      tanggalDokumenFormatted,
+      isEnglish ? "Person in charge," : "Penanggung Jawab,",
+      namaPenanggungJawab
+    );
+
+    pdf.save(
+      isEnglish
+        ? safeFileName(`Activity Proposal - ${namaKegiatan}.pdf`)
+        : safeFileName(`Proposal Kegiatan - ${namaKegiatan}.pdf`)
+    );
+
+    return;
+  }
+
+  // Fallback sementara untuk template lain
+  const title = selectedTemplate?.name || "Dokumen";
+
+  addCenteredText(title.toUpperCase(), 16, true, 12);
+
+  selectedTemplate?.fields.forEach((field) => {
+    let value = getValue(field.name);
+
+    if (field.type === "date") {
+      value = isEnglish
+        ? formatTanggalInggris(value)
+        : formatTanggalIndonesia(value);
+    }
+
+    addParagraph(`${field.label}: ${value || "-"}`);
+  });
+
+  addSignatureBlock(
+    getValue("kota") || "-",
+    "",
+    isEnglish ? "Signature," : "Tanda tangan,",
+    getValue("nama") ||
+      getValue("namaPenandatangan") ||
+      getValue("namaPenanggungJawab") ||
+      getValue("namaBisnis") ||
+      getValue("notulis") ||
+      getValue("namaPemberi") ||
+      "Nama Penandatangan"
+  );
+
+  pdf.save(
+    safeFileName(`${title} - ${new Date().getTime()}.pdf`)
+  );
+}
+
+ 
+
 function getCanvasPoint(event: PointerEvent<HTMLCanvasElement>) {
   const canvas = signatureCanvasRef.current;
 
@@ -526,8 +783,16 @@ function clearAllInputs() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
 
+  const submitter = (event.nativeEvent as SubmitEvent)
+    .submitter as HTMLButtonElement | null;
+
+  const downloadType = submitter?.value || "word";
+
   const formData = new FormData(event.currentTarget);
-  const values = Object.fromEntries(formData.entries());
+  const values = Object.fromEntries(formData.entries()) as Record<
+    string,
+    FormDataEntryValue
+  >;
 
 if (!signatureData) {
   alert("Tanda tangan wajib diisi.");
@@ -554,6 +819,11 @@ if (
 
   const bahasaDokumen = values.bahasaDokumen as string;
 const isEnglish = bahasaDokumen === "en";
+
+if (downloadType === "pdf") {
+  handleDownloadPdf(values, isEnglish);
+  return;
+}
 
 let nama = "";
 let kota = "";
@@ -2861,14 +3131,27 @@ const signatureImage = dataUrlToUint8Array(signatureData);
     Kosongkan Isian
   </button>
 
-  <button
-    type="submit"
-    className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700"
-  >
-    Buat Dokumen
-  </button>
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <button
+      type="submit"
+      name="downloadType"
+      value="word"
+      className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700"
+    >
+      Download Word
+    </button>
+
+    <button
+      type="submit"
+      name="downloadType"
+      value="pdf"
+      className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white transition hover:bg-red-700"
+    >
+      Download PDF
+    </button>
+  </div>
 </div>
-            </form>
+</form>
             {showClearConfirm && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
     <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
