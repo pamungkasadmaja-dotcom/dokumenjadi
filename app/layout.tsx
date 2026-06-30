@@ -19,7 +19,10 @@ export const metadata: Metadata = {
   },
   description:
     "Buat dokumen formal online dengan mudah. Tersedia template surat izin, surat pengunduran diri, surat lamaran kerja, CV, invoice, notulen rapat, berita acara, surat kuasa, dan surat pernyataan.",
-  keywords: [
+  verification: {
+  google: "rXPW-YCmzFOCu1XfFSpOYqxBBEzrAdeSOpJYfg0Yd5g",
+},
+    keywords: [
     "buat surat online",
     "template surat",
     "surat izin",
