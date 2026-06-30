@@ -626,6 +626,357 @@ function handleDownloadPdf(
     return;
   }
 
+  if (selectedTemplateId === "invoice") {
+    const namaBisnis = getValue("namaBisnis");
+    const namaPelanggan = getValue("namaPelanggan");
+    const nomorInvoice = getValue("nomorInvoice");
+    const tanggalInvoice = getValue("tanggalInvoice");
+    const catatan = getValue("catatan");
+
+    const invoiceRows = invoiceItems
+      .map((item) => {
+        const jumlah = Number(item.jumlah || 0);
+        const hargaSatuan = Number(item.hargaSatuan || 0);
+
+        return {
+          deskripsi: item.deskripsi.trim(),
+          jumlah,
+          hargaSatuan,
+          total: jumlah * hargaSatuan,
+        };
+      })
+      .filter(
+        (item) =>
+          item.deskripsi !== "" || item.jumlah > 0 || item.hargaSatuan > 0
+      );
+
+    if (invoiceRows.length === 0) {
+      alert("Minimal isi 1 item tagihan.");
+      return;
+    }
+
+    if (invoiceRows.some((item) => item.deskripsi === "")) {
+      alert("Deskripsi wajib diisi pada setiap item tagihan.");
+      return;
+    }
+
+    if (
+      invoiceRows.some(
+        (item) =>
+          !Number.isFinite(item.jumlah) ||
+          !Number.isFinite(item.hargaSatuan) ||
+          item.jumlah <= 0 ||
+          item.hargaSatuan <= 0
+      )
+    ) {
+      alert("Jumlah dan harga satuan pada setiap item harus lebih dari 0.");
+      return;
+    }
+
+    const tanggalInvoiceFormatted = isEnglish
+      ? formatTanggalInggris(tanggalInvoice)
+      : formatTanggalIndonesia(tanggalInvoice);
+
+    const formatUang = (angka: number) =>
+      new Intl.NumberFormat(isEnglish ? "en-US" : "id-ID", {
+        style: "currency",
+        currency: "IDR",
+        maximumFractionDigits: 0,
+      }).format(angka);
+
+    const formatAngka = (angka: number) =>
+      new Intl.NumberFormat(isEnglish ? "en-US" : "id-ID", {
+        maximumFractionDigits: 2,
+      }).format(angka);
+
+    const totalTagihan = invoiceRows.reduce(
+      (sum, item) => sum + item.total,
+      0
+    );
+
+    const tableWidth = 132;
+    const tableX = (pageWidth - tableWidth) / 2;
+
+    function addInvoiceTextBlock(
+      text: string,
+      x: number,
+      width: number,
+      bold = false,
+      size = 12,
+      after = 3
+    ) {
+      pdf.setFont("times", bold ? "bold" : "normal");
+      pdf.setFontSize(size);
+
+      const lines = pdf.splitTextToSize(text || "-", width) as string[];
+
+      lines.forEach((line) => {
+        checkPage(8);
+        pdf.text(line, x, y);
+        y += 7;
+      });
+
+      y += after;
+    }
+
+    function addInvoiceRow(
+      cells: {
+        text: string;
+        width: number;
+        bold?: boolean;
+        align?: "left" | "right" | "center";
+      }[]
+    ) {
+      pdf.setFontSize(11);
+
+      const lineHeight = 5;
+
+      const cellLines = cells.map((cell) =>
+        pdf.splitTextToSize(cell.text || " ", cell.width - 6) as string[]
+      );
+
+      const maxLines = Math.max(...cellLines.map((lines) => lines.length));
+      const rowHeight = Math.max(12, maxLines * lineHeight + 7);
+
+      checkPage(rowHeight + 3);
+
+      let x = tableX;
+
+      cells.forEach((cell, cellIndex) => {
+        pdf.setDrawColor(0);
+        pdf.setLineWidth(0.2);
+        pdf.rect(x, y, cell.width, rowHeight);
+
+        pdf.setFont("times", cell.bold ? "bold" : "normal");
+        pdf.setFontSize(11);
+
+        const lines = cellLines[cellIndex];
+        const align = cell.align || "left";
+
+        lines.forEach((line, lineIndex) => {
+          const textY = y + 7 + lineIndex * lineHeight;
+
+          if (align === "right") {
+            pdf.text(line, x + cell.width - 3, textY, {
+              align: "right",
+            });
+          } else if (align === "center") {
+            pdf.text(line, x + cell.width / 2, textY, {
+              align: "center",
+            });
+          } else {
+            pdf.text(line, x + 3, textY);
+          }
+        });
+
+        x += cell.width;
+      });
+
+      y += rowHeight;
+    }
+
+    y = 38;
+
+    addCenteredText("INVOICE", 18, true, 8);
+
+    pdf.setFont("times", "normal");
+    pdf.setFontSize(12);
+    pdf.text(nomorInvoice, pageWidth / 2, y, {
+      align: "center",
+    });
+
+    y += 14;
+
+    addInvoiceRow([
+      {
+        text: isEnglish ? "Seller / Business" : "Penjual / Bisnis",
+        width: 42,
+        bold: true,
+      },
+      {
+        text: namaBisnis,
+        width: 90,
+      },
+    ]);
+
+    addInvoiceRow([
+      {
+        text: isEnglish ? "Customer" : "Pelanggan",
+        width: 42,
+        bold: true,
+      },
+      {
+        text: namaPelanggan,
+        width: 90,
+      },
+    ]);
+
+    addInvoiceRow([
+      {
+        text: isEnglish ? "Invoice Date" : "Tanggal Invoice",
+        width: 42,
+        bold: true,
+      },
+      {
+        text: tanggalInvoiceFormatted,
+        width: 90,
+      },
+    ]);
+
+    y += 12;
+
+    addInvoiceTextBlock(
+      isEnglish ? "Billing Details" : "Rincian Tagihan",
+      tableX,
+      tableWidth,
+      true,
+      13,
+      4
+    );
+
+    addInvoiceRow([
+      {
+        text: isEnglish ? "Description" : "Deskripsi",
+        width: 53,
+        bold: true,
+      },
+      {
+        text: isEnglish ? "Qty" : "Jumlah",
+        width: 20,
+        bold: true,
+      },
+      {
+        text: isEnglish ? "Unit Price" : "Harga Satuan",
+        width: 30,
+        bold: true,
+      },
+      {
+        text: "Total",
+        width: 29,
+        bold: true,
+      },
+    ]);
+
+    invoiceRows.forEach((item) => {
+      addInvoiceRow([
+        {
+          text: item.deskripsi,
+          width: 53,
+        },
+        {
+          text: formatAngka(item.jumlah),
+          width: 20,
+        },
+        {
+          text: formatUang(item.hargaSatuan),
+          width: 30,
+        },
+        {
+          text: formatUang(item.total),
+          width: 29,
+        },
+      ]);
+    });
+
+    addInvoiceRow([
+      {
+        text: " ",
+        width: 53,
+      },
+      {
+        text: " ",
+        width: 20,
+      },
+      {
+        text: isEnglish ? "Grand Total" : "Total Tagihan",
+        width: 30,
+        bold: true,
+      },
+      {
+        text: formatUang(totalTagihan),
+        width: 29,
+        bold: true,
+      },
+    ]);
+
+    if (catatan) {
+      y += 12;
+
+      addInvoiceTextBlock(
+        isEnglish ? "Payment Notes" : "Catatan Pembayaran",
+        tableX,
+        tableWidth,
+        true,
+        13,
+        4
+      );
+
+      addInvoiceTextBlock(catatan, tableX, tableWidth, false, 12, 4);
+    }
+
+        y += 6;
+
+    addInvoiceTextBlock(
+      isEnglish
+        ? "Thank you for your trust and cooperation."
+        : "Terima kasih atas kepercayaan dan kerja samanya.",
+      tableX,
+      tableWidth,
+      false,
+      12,
+      0
+    );
+
+    const signatureBlockWidth = 60;
+    const signatureBlockX = pageWidth - marginRight - signatureBlockWidth;
+
+    let signatureY = Math.max(y + 12, 205);
+
+    if (signatureY + 50 > pageHeight - 18) {
+      if (y < 220) {
+        signatureY = pageHeight - 68;
+      } else {
+        pdf.addPage();
+        signatureY = 45;
+      }
+    }
+
+    pdf.setFont("times", "normal");
+    pdf.setFontSize(12);
+
+    pdf.text(
+      isEnglish ? "Seller," : "Penjual,",
+      signatureBlockX + signatureBlockWidth / 2,
+      signatureY,
+      {
+        align: "center",
+      }
+    );
+
+    if (signatureData) {
+      pdf.addImage(
+        signatureData,
+        "PNG",
+        signatureBlockX + 14,
+        signatureY + 8,
+        34,
+        20
+      );
+    }
+
+    pdf.text(
+      namaBisnis,
+      signatureBlockX + signatureBlockWidth / 2,
+      signatureY + 42,
+      {
+        align: "center",
+      }
+    );
+
+    pdf.save(safeFileName(`Invoice - ${nomorInvoice}.pdf`));
+    return;
+  }
+
   // Fallback sementara untuk template lain
   const title = selectedTemplate?.name || "Dokumen";
 
