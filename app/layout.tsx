@@ -13,16 +13,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://dokumenjadi.vercel.app"),
+
   title: {
     default: "Dokumen Jadi - Buat Surat, CV, Invoice, dan Notulen Online",
     template: "%s | Dokumen Jadi",
   },
+
   description:
     "Buat dokumen formal online dengan mudah. Tersedia template surat izin, surat pengunduran diri, surat lamaran kerja, CV, invoice, notulen rapat, berita acara, surat kuasa, dan surat pernyataan.",
+
   verification: {
-  google: "rXPW-YCmzFOCu1XfFSpOYqxBBEzrAdeSOpJYfg0Yd5g",
-},
-    keywords: [
+    google: "rXPW-YCmzFOCu1XfFSpOYqxBBEzrAdeSOpJYfg0Yd5g",
+  },
+
+  keywords: [
     "buat surat online",
     "template surat",
     "surat izin",
@@ -35,13 +40,20 @@ export const metadata: Metadata = {
     "surat kuasa",
     "surat pernyataan",
   ],
+
   authors: [{ name: "Dokumen Jadi" }],
   creator: "Dokumen Jadi",
   publisher: "Dokumen Jadi",
+
   robots: {
     index: true,
     follow: true,
   },
+
+  alternates: {
+    canonical: "https://dokumenjadi.vercel.app",
+  },
+
   openGraph: {
     title: "Dokumen Jadi - Buat Dokumen Formal Online",
     description:
